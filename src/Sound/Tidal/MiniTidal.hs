@@ -707,10 +707,45 @@ transitionArg tidal = choice [
 main :: IO ()
 main = do
   putStrLn "miniTidal"
-  tidal <- T.startTidal T.superdirtTarget T.defaultConfig
+  tidal <- T.startTidal (T.superdirtTarget {T.oLatency = 0.1, T.oAddress = "127.0.0.1", T.oPort = 57120}) (T.defaultConfig {T.cFrameTimespan = 1/20})
+
   forever $ do
     cmd <- miniTidalIO tidal <$> getLine
     either (\x -> putStrLn $ "error: " ++ show x) id cmd
+
+tidalIO :: Stream -> Parser (IO ())
+tidalIO s = choice [
+  reserved "hush" >> return $ Tidal.streamHush s,
+  reserved "list" >> return $ Tidal.streamList s,
+  tidalIO_int <*> literalArg,
+  tidalIO_cp <*> patternArg,
+  tidalIO_double <*> literalArg
+  ]
+
+tidalIO_int :: Stream -> Parser (Int -> IO ())
+tidalIO_int s = choice [
+  reserved "mute" >> return $ Tidal.streamMute s,
+  reserved "unmute" >> return $ Tidal.streamUnmute s,
+  reserved "solo" >> return $ Tidal.streamSolo s,
+  reserved "unsolo" >> return $ Tidal.streamUnsolo s
+  ]
+
+tidalIO_cp :: Stream -> Parser (T.ControlPattern -> IO ())
+tidalIO_cp s = choice [
+  tidalIO_int_cp <*> literalArg,
+  reserved "once" >> return $ Tidal.streamOnce s False,
+  reserved "asap" >> return $ Tidal.streamOnce s True
+  ]
+
+tidalIO_double :: Stream -> Parser (Double -> IO ())
+tidalIO_double s = choice [
+  reserved "nudgeAll" >> return $ Tidal.streamNudgeAll s
+  ]
+
+tidalIO_int_cp :: Stream -> Parser (Int -> T.ControlPattern -> IO ())
+tidalIO_int_cp s = choice [
+  reserved "p" >> return $ Tidal.streamReplace s,
+  ]
 
 -- things whose status in new tidal we are unsure of
 --(function "within'" >> return T.within') <*> literalArg <*> transformationArg,
